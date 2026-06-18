@@ -341,10 +341,10 @@ else:
                         st.success("تم الحفظ الفوري بالقاعدة!")
                         st.rerun()
                     except: st.error("الكود مكرر!")
-        
+                    
         with t_edit:
             if not inv_df.empty:
-                target_edit = st.selectbox("اختر الصنف للتعديل", inv_df["item_code"].values, key="edit_sel")
+                target_edit = st.selectbox("اختر الصنف للتعديل", inv_df["item_code"].values, key="edit_item_sel")
                 item_data = inv_df[inv_df["item_code"] == target_edit].iloc[0]
                 
                 ename = st.text_input("الاسم الجديد", value=item_data["item_name"])
@@ -359,38 +359,68 @@ else:
                                  WHERE item_code=?''', (ename, ecat, eunit, ewh, epur, esal, target_edit))
                     st.success("تم التعديل الفوري!")
                     st.rerun()
-                    
-        with t_delete:
-            target_del = st.selectbox("اختر الصنف للحذف", inv_df["item_code"].values, key="del_sel")
-            if st.button("تأكيد الحذف النهائي"):
-                run_query("DELETE FROM inventory WHERE item_code=?", (target_del,))
-                st.success("تم الحذف بنجاح!")
-                st.rerun()
 
-    # --- 2. رصيد أول المدة Excel ---
-    elif "رصيد أول المدة" in choice:
-        st.header("📊 رفع رصيد أول المدة عبر شيت Excel مباشرة إلى القاعدة")
-        uploaded_file = st.file_uploader("اختر ملف الاكسيل", type=["xlsx", "xls"])
-        if uploaded_file:
-            try:
-                excel_df = pd.read_excel(uploaded_file, dtype={"كود الصنف": str})
-                st.dataframe(excel_df)
-                if st.button("تأكيد الدمج والحفظ النهائي باللاصق"):
-                    conn = sqlite3.connect(DB_FILE)
-                    for _, row in excel_df.iterrows():
-                        conn.execute('''
-                            INSERT INTO inventory (item_code, item_name, category, unit_type, warehouse_loc, quantity, purchase_price, sale_price)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                            ON CONFLICT(item_code) DO UPDATE SET
-                            quantity = quantity + EXCLUDED.quantity,
-                            purchase_price = EXCLUDED.purchase_price,
-                            sale_price = EXCLUDED.sale_price
-                        ''', (str(row['كود الصنف']), str(row['اسم الصنف']), str(row['تصنيف الصنف']), str(row['نوع الوحدة']), str(row['موقع المخزن']), int(row['الكمية']), float(row['سعر الشراء']), float(row['سعر البيع'])))
-                    conn.commit()
-                    conn.close()
-                    st.success("🚀 تم الدمج والحفظ بنجاح داخل قاعدة البيانات!")
+        with t_delete:
+            if not inv_df.empty:
+                target_del = st.selectbox("اختر الصنف للحذف", inv_df["item_code"].values, key="del_item_sel")
+                if st.button("تأكيد الحذف النهائي"):
+                    run_query("DELETE FROM inventory WHERE item_code=?", (target_del,))
+                    st.success("تم الحذف بنجاح!")
                     st.rerun()
-            except Exception as e: st.error(f"خطأ: {e}")
+
+    # --- 2. رصيد أول المدة Excel + خاصية اللصق ---
+    elif "رصيد أول المدة" in choice:
+        st.header("📊 رفع وتثبيت رصيد أول المدة مباشرة إلى القاعدة")
+        
+        t_paste, t_upload = st.tabs(["📋 خاصية اللصق المباشر السريع", "📥 رفع ملف Excel"])
+        
+        # دالة موحدة لمعالجة وحفظ البيانات باللاصق في قاعدة البيانات
+        def process_and_save_inventory(dataframe):
+            try:
+                conn = sqlite3.connect(DB_FILE)
+                for _, row in dataframe.iterrows():
+                    conn.execute('''
+                        INSERT INTO inventory (item_code, item_name, category, unit_type, warehouse_loc, quantity, purchase_price, sale_price)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(item_code) DO UPDATE SET
+                        quantity = quantity + EXCLUDED.quantity,
+                        purchase_price = EXCLUDED.purchase_price,
+                        sale_price = EXCLUDED.sale_price
+                    ''', (str(row['كود الصنف']), str(row['اسم الصنف']), str(row['تصنيف الصنف']), str(row['نوع الوحدة']), str(row['موقع المخزن']), int(row['الكمية']), float(row['سعر الشراء']), float(row['سعر البيع'])))
+                conn.commit()
+                conn.close()
+                st.success("🚀 تم التثبيت باللاصق ودمج البيانات بنجاح داخل قاعدة البيانات!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء معالجة البيانات، يرجى التأكد من تطابق أسماء الأعمدة: {e}")
+
+        with t_paste:
+            st.markdown("💡 **انسخ البيانات من Excel مباشرة (تأكد من شمول العناوين) والصقها في الحقل أدناه:**")
+            st.caption("الترتيب المطلق للأعمدة: كود الصنف | اسم الصنف | تصنيف الصنف | نوع الوحدة | موقع المخزن | الكمية | سعر الشراء | سعر البيع")
+            pasted_data = st.text_area("أقحم الخلايا المنسوخة هنا بالفأرة أو Ctrl+V", height=200, placeholder="كود الصنف\tاسم الصنف\t...")
+            
+            if pasted_data.strip():
+                try:
+                    from io import StringIO
+                    paste_df = pd.read_csv(StringIO(pasted_data), sep="\t")
+                    st.write("🔍 **معاينة البيانات الملصوقة:**")
+                    st.dataframe(paste_df)
+                    
+                    if st.button("🚀 تأكيد ترحيل البيانات الملصوقة للقاعدة"):
+                        process_and_save_inventory(paste_df)
+                except Exception as ex:
+                    st.error(f"خطأ في قراءة البيانات الملصوقة: {ex}")
+                    
+        with t_upload:
+            uploaded_file = st.file_uploader("اختر ملف الاكسيل المجهز", type=["xlsx", "xls"])
+            if uploaded_file:
+                try:
+                    excel_df = pd.read_excel(uploaded_file, dtype={"كود الصنف": str})
+                    st.dataframe(excel_df)
+                    if st.button("تأكيد الدمج والحفظ النهائي من الملف"):
+                        process_and_save_inventory(excel_df)
+                except Exception as e: 
+                    st.error(f"خطأ: {e}")
 
     # --- 3. حالة المخزن ---
     elif "حالة المخزن" in choice:
@@ -420,70 +450,87 @@ else:
     elif "حركة فواتير الشراء" in choice:
         st.header("📥 تسجيل المشتريات وتحديث المخزن تلقائياً")
         inv_df = load_table("SELECT * FROM inventory")
-        if inv_df.empty: st.warning("لا توجد أصناف مكودة.")
+        if inv_df.empty: 
+            st.warning("⚠️ لا توجد أصناف مكودة بالمخزن حالياً، يرجى تكويد الأصناف أولاً.")
         else:
             c1, c2, c3 = st.columns(3)
             vendor = c1.text_input("المورد", value="مورد عام")
             icode = c2.selectbox("اختر الصنف", inv_df["item_code"].values)
             qty = c3.number_input("الكمية الواردة", min_value=1, step=1)
             
-            item_info = inv_df[inv_df["item_code"] == icode].iloc[0]
-            if st.button("تسجيل الفاتورة وزيادة المخزن"):
-                run_query("UPDATE inventory SET quantity = quantity + ? WHERE item_code = ?", (qty, icode))
-                pur_id = "PUR-" + str(int(datetime.now().timestamp()))
-                run_query('''INSERT INTO purchases (invoice_id, date, vendor, item_code, item_name, category, unit_type, warehouse_loc, approved_purchase_price, quantity, total_purchase, user_in_charge)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                          (pur_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), vendor, icode, item_info["item_name"], item_info["category"], item_info["unit_type"], item_info["warehouse_loc"], item_info["purchase_price"], qty, item_info["purchase_price"]*qty, st.session_state.user))
-                st.success("✅ تم حفظ الفاتورة وتعديل جرد المخزن فوراً!")
-                st.rerun()
+            matching_items = inv_df[inv_df["item_code"] == icode]
+            if matching_items.empty:
+                st.error("الصنف غير موجود.")
+            else:
+                item_info = matching_items.iloc[0]
+                if st.button("تسجيل الفاتورة وزيادة المخزن"):
+                    run_query("UPDATE inventory SET quantity = quantity + ? WHERE item_code = ?", (qty, icode))
+                    pur_id = "PUR-" + str(int(datetime.now().timestamp()))
+                    run_query('''INSERT INTO purchases (invoice_id, date, vendor, item_code, item_name, category, unit_type, warehouse_loc, approved_purchase_price, quantity, total_purchase, user_in_charge)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                              (pur_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), vendor, icode, item_info["item_name"], item_info["category"], item_info["unit_type"], item_info["warehouse_loc"], item_info["purchase_price"], qty, item_info["purchase_price"]*qty, st.session_state.user))
+                    st.success("✅ تم حفظ الفاتورة وتعديل جرد المخزن فوراً!")
+                    st.rerun()
 
-    # --- 6. حركة فواتير البيع ---
+    # --- 6. حركة فواتير البيع (مصلحة ومحمية ضد انهيار IndexError) ---
     elif "حركة فواتير البيع" in choice:
         st.header("📤 نظام إنشاء وتثبيت فواتير المبيعات")
         inv_df = load_table("SELECT * FROM inventory")
         
-        c1, c2, c3 = st.columns(3)
-        cname = c1.text_input("اسم العميل")
-        icode = c2.selectbox("اختر الصنف للبيع", inv_df["item_code"].values)
-        qty = c3.number_input("الكمية المطلوبة", min_value=1, step=1)
-        
-        item_info = inv_df[inv_df["item_code"] == icode].iloc[0]
-        
-        if st.button("➕ إضافة للسلة"):
-            if item_info["quantity"] < qty: st.error("الكمية غير كافية بالمخزن!")
+        if inv_df.empty:
+            st.warning("⚠️ لا يمكن إنشاء فواتير بيع لأن المخزن فارغ تماماً ولا يحتوي على أصناف مكودة.")
+        else:
+            c1, c2, c3 = st.columns(3)
+            cname = c1.text_input("اسم العميل")
+            icode = c2.selectbox("اختر الصنف للبيع", inv_df["item_code"].values)
+            qty = c3.number_input("الكمية المطلوبة", min_value=1, step=1)
+            
+            matching_items = inv_df[inv_df["item_code"] == icode]
+            
+            if matching_items.empty:
+                st.error("⚠️ خطأ: الصنف المحدد غير موجود في قاعدة البيانات.")
             else:
-                st.session_state.cart.append({
-                    "item_code": icode, "item_name": item_info["item_name"], "category": item_info["category"],
-                    "unit": item_info["unit_type"], "warehouse_loc": item_info["warehouse_loc"], "qty": qty,
-                    "price": item_info["sale_price"], "discount": 0.0, "final_total": item_info["sale_price"]*qty,
-                    "cost_basis": item_info["purchase_price"]*qty
-                })
-                st.success("تم الإضافة للسلة المؤقتة.")
-                st.rerun()
+                item_info = matching_items.iloc[0]
                 
-        if st.session_state.cart:
-            st.write(pd.DataFrame(st.session_state.cart))
-            if st.button("🧾 إنهاء وحفظ الفاتورة نهائياً"):
-                inv_id = "INV-" + str(int(datetime.now().timestamp()))
-                cur_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
-                for item in st.session_state.cart:
-                    run_query("UPDATE inventory SET quantity = quantity - ? WHERE item_code = ?", (item["qty"], item["item_code"]))
-                    run_query('''INSERT INTO sales (invoice_id, date, client_name, client_phone, client_address, sale_type, collect_system, collect_date, item_code, item_name, category, unit_type, warehouse_loc, quantity, unit_price, discount, total_sale, total_cost, net_profit, user_in_charge)
-                                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                              (inv_id, cur_time, cname, "", "", "كاش", "فورياً", "فورياً", item["item_code"], item["item_name"], item["category"], item["unit"], item["warehouse_loc"], item["qty"], item["price"], item["discount"], item["final_total"], item["cost_basis"], item["final_total"]-item["cost_basis"], st.session_state.user))
-                
-                st.success("🎉 تم ترحيل الفاتورة وحفظها بنجاح!")
-                # عرض الفاتورة للطباعة
-                html_code = generate_triple_invoice_html(inv_id, cur_time, cname, "", "", "كاش", "فورياً", "فورياً", st.session_state.user, st.session_state.cart, SHOWROOM_NAME, SHOWROOM_ADDRESS, INQUIRY_NUMBER)
-                st.components.v1.html(html_code, height=800, scrolling=True)
-                st.session_state.cart = []
+                if st.button("➕ إضافة للسلة"):
+                    if item_info["quantity"] < qty: 
+                        st.error(f"❌ الكمية غير كافية بالمخزن! المتاح حالياً هو: ({item_info['quantity']}) قطعة فقط.")
+                    else:
+                        st.session_state.cart.append({
+                            "item_code": icode, "item_name": item_info["item_name"], "category": item_info["category"],
+                            "unit": item_info["unit_type"], "warehouse_loc": item_info["warehouse_loc"], "qty": qty,
+                            "price": item_info["sale_price"], "discount": 0.0, "final_total": item_info["sale_price"]*qty,
+                            "cost_basis": item_info["purchase_price"]*qty
+                        })
+                        st.success("تم الإضافة للسلة المؤقتة.")
+                        st.rerun()
+                        
+                if st.session_state.cart:
+                    st.write(pd.DataFrame(st.session_state.cart))
+                    if st.button("🧾 إنهاء وحفظ الفاتورة نهائياً باللاصق"):
+                        inv_id = "INV-" + str(int(datetime.now().timestamp()))
+                        cur_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        for item in st.session_state.cart:
+                            # خصم من المخزن
+                            run_query("UPDATE inventory SET quantity = quantity - ? WHERE item_code = ?", (item["qty"], item["item_code"]))
+                            # إدخال في المبيعات
+                            run_query('''INSERT INTO sales (invoice_id, date, client_name, client_phone, client_address, sale_type, collect_system, collect_date, item_code, item_name, category, unit_type, warehouse_loc, quantity, unit_price, discount, total_sale, total_cost, net_profit, user_in_charge)
+                                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                                      (inv_id, cur_time, cname, "", "", "كاش", "فورياً", "فورياً", item["item_code"], item["item_name"], item["category"], item["unit"], item["warehouse_loc"], item["qty"], item["price"], item["discount"], item["final_total"], item["cost_basis"], item["final_total"]-item["cost_basis"], st.session_state.user))
+                        
+                        st.success("🎉 تم ترحيل الفاتورة وحفظها باللاصق في قاعدة البيانات بنجاح!")
+                        # عرض الفاتورة فوراً للطباعة
+                        html_code = generate_triple_invoice_html(inv_id, cur_time, cname, "", "", "كاش", "فورياً", "فورياً", st.session_state.user, st.session_state.cart, SHOWROOM_NAME, SHOWROOM_ADDRESS, INQUIRY_NUMBER)
+                        st.components.v1.html(html_code, height=600, scrolling=True)
+                        st.session_state.cart = []
 
-    # --- 7. البحث عن الفواتيروطباعتها ---
-    elif "البحث عن الفواتيروطباعتها" in choice or "البحث عن الفواتير وطباعتها" in choice:
-        st.header("🔎 البحث عن فواتير المبيعات وطباعتها")
+    # --- 7. البحث عن الفواتير وطباعتها ---
+    elif "البحث عن الفواتير وطباعتها" in choice:
+        st.header("🔎 البحث عن الفواتير وطباعتها")
         sales_df = load_table("SELECT * FROM sales")
-        if sales_df.empty: st.info("لا توجد فواتير مبيعات مسجلة.")
+        if sales_df.empty: 
+            st.info("لا توجد فواتير مبيعات مسجلة حتى الآن.")
         else:
             unique_invs = sales_df["invoice_id"].unique()
             selected_inv = st.selectbox("اختر رقم الفاتورة للاستعراض والطباعة", unique_invs)
@@ -500,13 +547,13 @@ else:
                     "warehouse_loc": r["warehouse_loc"]
                 })
             
-            if st.button("🖨️ تجهيز الفاتورة للطباعة"):
+            if st.button("🖨️ تجهيز واستعراض الفاتورة الثلاثية للطباعة"):
                 html_code = generate_triple_invoice_html(selected_inv, first_row["date"], first_row["client_name"], first_row["client_phone"], first_row["client_address"], first_row["sale_type"], first_row["collect_system"], first_row["collect_date"], first_row["user_in_charge"], cart_format, SHOWROOM_NAME, SHOWROOM_ADDRESS, INQUIRY_NUMBER)
-                st.components.v1.html(html_code, height=800, scrolling=True)
+                st.components.v1.html(html_code, height=600, scrolling=True)
 
     # --- 8. تقارير البيع والشراء والأرباح ---
     elif "تقارير البيع والشراء والأرباح" in choice:
-        st.header("📈 التقارير المالية والإحصائيات والأرباح")
+        st.header("📈 تقارير البيع والشراء والأرباح الإجمالية")
         s_df = load_table("SELECT * FROM sales")
         p_df = load_table("SELECT * FROM purchases")
         e_df = load_table("SELECT * FROM expenses")
@@ -518,82 +565,110 @@ else:
         net_profit_val = gross_profit - total_expenses_val
         
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("إجمالي المبيعات", f"{total_sales_val} ج.م")
-        c2.metric("إجمالي المشتريات", f"{total_purchases_val} ج.م")
-        c3.metric("إجمالي المصاريف", f"{total_expenses_val} ج.م")
-        c4.metric("صافي الأرباح الدقيق", f"{net_profit_val} ج.م")
+        c1.metric("إجمالي فواتير البيع", f"{total_sales_val} ج.م")
+        c2.metric("إجمالي فواتير الشراء", f"{total_purchases_val} ج.م")
+        c3.metric("إجمالي المصاريف العمومية", f"{total_expenses_val} ج.م")
+        c4.metric("صافي الأرباح الفعلي", f"{net_profit_val} ج.م")
 
     # --- 9. المصاريف ---
-    elif "المصاريف" in choice:
+    elif "💸 المصاريف" in choice or "المصاريف" in choice:
         st.header("💸 تسجيل وضبط المصاريف النثرية والعمومية")
-        t_eview, t_eadd = st.tabs(["📋 جدول المصاريف", "➕ إضافة مصروف"])
+        t_eview, t_eadd = st.tabs(["📋 جدول المصاريف الحالي", "➕ إضافة مصروف جديد"])
         
         with t_eview:
             st.dataframe(load_table("SELECT * FROM expenses"), use_container_width=True)
         with t_eadd:
-            e_desc = st.text_input("بيان المصروف")
-            e_amt = st.number_input("المبلغ", min_value=0.0)
-            if st.button("حفظ المصروف"):
+            e_desc = st.text_input("بيان وتفاصيل المصروف")
+            e_amt = st.number_input("المبلغ المدفوع", min_value=0.0)
+            if st.button("حفظ وتسجيل المصروف فورا"):
                 if e_desc and e_amt > 0:
                     run_query("INSERT INTO expenses (date, details, amount, user_in_charge) VALUES (?,?,?,?)",
                               (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), e_desc, e_amt, st.session_state.user))
-                    st.success("تم الحفظ!")
+                    st.success("تم تسجيل المصروف بنجاح!")
                     st.rerun()
 
     # --- 10. الحضور والانصراف ---
     elif "الحضور والانصراف" in choice:
-        st.header("⏰ تسجيل الحضور والانصراف للموظفين")
+        st.header("⏰ نظام تسجيل الحضور والانصراف")
         att_df = load_table("SELECT * FROM attendance")
         st.dataframe(att_df, use_container_width=True)
         
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("⏱️ تسجيل حضور الآن", use_container_width=True):
+            if st.button("⏱️ تسجيل حضور الموظف الحالي الآن", use_container_width=True):
                 run_query("INSERT INTO attendance (employee, date, check_in, check_out) VALUES (?,?,?,?)",
                           (st.session_state.user, datetime.now().strftime("%Y-%m-%d"), datetime.now().strftime("%H:%M:%S"), "لم ينصرف بعد"))
-                st.success("تم تسجيل الحضور!")
+                st.success("تم تسجيل حضورك الفوري بالقاعدة!")
                 st.rerun()
         with c2:
-            if st.button("⏱️ تسجيل انصراف الآن", use_container_width=True):
+            if st.button("⏱️ تسجيل انصراف الموظف الحالي الآن", use_container_width=True):
                 run_query("UPDATE attendance SET check_out=? WHERE employee=? AND date=? AND check_out='لم ينصرف بعد'",
                           (datetime.now().strftime("%H:%M:%S"), st.session_state.user, datetime.now().strftime("%Y-%m-%d")))
-                st.success("تم تسجيل الانصراف!")
+                st.success("تم تسجيل انصرافك بنجاح!")
                 st.rerun()
 
-    # --- 11. إدارة وتعديل الصلاحيات والحسابات ---
+    # --- 11. إدارة وتعديل الصلاحيات والحسابات (مع ميزة تعديل اليوزرات) ---
     elif "إدارة وتعديل الصلاحيات والحسابات" in choice:
-        st.header("⚙️ إدارة الصلاحيات التفاعلية وإضافة حسابات مستخدمين جديدة")
-        tab_users, tab_roles = st.tabs(["👥 حسابات المستخدمين", "🔑 صلاحيات الصفحات"])
+        st.header("⚙️ إدارة وتعديل الصلاحيات والحسابات")
+        tab_users, tab_roles = st.tabs(["👥 إدارة وتعديل اليوزرات (المستخدمين)", "🔑 صلاحيات الأقسام"])
         
         with tab_users:
             u_df = load_table("SELECT * FROM users")
-            st.dataframe(u_df)
-            st.subheader("➕ إضافة حساب مستخدم جديد")
-            new_u = st.text_input("اسم المستخدم الجديد").strip()
-            new_p = st.text_input("كلمة المرور الجديدة").strip()
-            new_r = st.selectbox("الرتبة للصلاحية", ["مدير", "مشرف", "موظف"])
-            if st.button("حفظ الحساب السحابي"):
-                if new_u and new_p:
-                    try:
-                        run_query("INSERT INTO users VALUES (?,?,?)", (new_u, new_p, new_r))
-                        st.success("تم الحفظ!")
-                        st.rerun()
-                    except: st.error("اسم المستخدم مكرر!")
+            st.subheader("📋 الحسابات المسجلة حالياً")
+            st.dataframe(u_df, use_container_width=True)
+            
+            c_add, c_edit, c_del = st.tabs(["➕ إضافة مستخدم جديد", "✏️ تعديل حساب مستخدم", "❌ حذف حساب مستخدم"])
+            
+            with c_add:
+                new_u = st.text_input("اسم المستخدم الجديد").strip()
+                new_p = st.text_input("كلمة المرور للمستخدم").strip()
+                new_r = st.selectbox("صلاحية الرتبة", ["مدير", "مشرف", "موظف"], key="add_role")
+                if st.button("حفظ الحساب الجديد"):
+                    if new_u and new_p:
+                        try:
+                            run_query("INSERT INTO users VALUES (?,?,?)", (new_u, new_p, new_r))
+                            st.success(f"تم إنشاء حساب للمستخدم {new_u} بنجاح!")
+                            st.rerun()
+                        except: st.error("اسم المستخدم مسجل مسبقاً بقاعدة البيانات!")
+            
+            with c_edit:
+                if not u_df.empty:
+                    selected_user_edit = st.selectbox("اختر اسم الحساب المراد تعديله", u_df["username"].values, key="edit_usr_sel")
+                    user_current_data = u_df[u_df["username"] == selected_user_edit].iloc[0]
                     
+                    edit_p = st.text_input("كلمة المرور الجديدة", value=str(user_current_data["password"]))
+                    edit_r = st.selectbox("الرتبة الجديدة", ["مدير", "مشرف", "موظف"], index=["مدير", "مشرف", "موظف"].index(user_current_data["role"]))
+                    
+                    if st.button("💾 حفظ وتثبيت تعديلات الحساب"):
+                        run_query("UPDATE users SET password=?, role=? WHERE username=?", (edit_p, edit_r, selected_user_edit))
+                        st.success(f"تم تعديل بيانات حساب {selected_user_edit} بنجاح!")
+                        st.rerun()
+                        
+            with c_del:
+                if not u_df.empty:
+                    selected_user_del = st.selectbox("اختر اسم الحساب المراد حذفه نهائياً", u_df["username"].values, key="del_usr_sel")
+                    if selected_user_del == st.session_state.user:
+                        st.warning("⚠️ لا يمكنك حذف الحساب الخاص بك أثناء تسجيل الدخول منه!")
+                    else:
+                        if st.button("❌ تأكيد حذف الحساب نهائياً"):
+                            run_query("DELETE FROM users WHERE username=?", (selected_user_del,))
+                            st.success("تم حذف حساب المستخدم نهائياً بنجاح!")
+                            st.rerun()
+                            
         with tab_roles:
-            st.subheader("🔑 جدول التحكم الصارم بالصلاحيات")
+            st.subheader("🔑 جدول التحكم بـ صلاحيات الأقسام")
             perms_df = load_table("SELECT * FROM permissions")
             edited_perms = st.data_editor(perms_df, use_container_width=True, disabled=["page_name"], key="perms_editor")
-            if st.button("💾 حفظ الصلاحيات والتعديلات الجديدة"):
+            if st.button("💾 حفظ وتثبيت الصلاحيات والتحديثات"):
                 for _, row in edited_perms.iterrows():
                     run_query("UPDATE permissions SET admin_auth=?, supervisor_auth=?, employee_auth=? WHERE page_name=?",
                               (int(row["admin_auth"]), int(row["supervisor_auth"]), int(row["employee_auth"]), row["page_name"]))
-                st.success("🚀 تم تحديث الصلاحيات بنجاح!")
+                st.success("🚀 تم تحديث صلاحيات الأقسام بنجاح!")
                 st.rerun()
 
-    # --- 12. صفحة إعدادات بيانات الفاتورة والدعم ---
+    # --- 12. إعدادات بيانات الفاتورة والدعم ---
     elif "إعدادات بيانات الفاتورة والدعم" in choice:
-        st.header("⚙️ تحديث وإعداد بيانات طباعة الفاتورة والدعم")
+        st.header("⚙️ إعدادات بيانات الفاتورة والدعم")
         with st.form("settings_form_updated"):
             new_showroom_name = st.text_input("اسم المعرض / الشركة بالفاتورة", value=SHOWROOM_NAME)
             new_showroom_address = st.text_input("العنوان بالتفصيل بالفاتورة", value=SHOWROOM_ADDRESS)

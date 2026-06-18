@@ -117,7 +117,7 @@ def load_data_into_session():
         # معالجة وتأكيد الأعمدة الجديدة للأصناف القديمة إن وُجدت
         for col in ["تصنيف الصنف", "نوع الوحدة", "موقع المخزن"]:
             if col not in st.session_state.inv_df.columns:
-                st.session_state.inv_df[col] = "غير محدد"
+                st.session_state.inv_df[col] = "غير مححدد"
                 
         st.session_state.inv_df["الكمية"] = pd.to_numeric(st.session_state.inv_df["الكمية"], errors='coerce').fillna(0).astype(int)
         st.session_state.inv_df["سعر الشراء"] = pd.to_numeric(st.session_state.inv_df["سعر الشراء"], errors='coerce').fillna(0.0)
@@ -295,7 +295,7 @@ else:
         st.session_state.cart = []
         st.rerun()
 
-    # استدعاء البيانات المستقرة من الـ Session State مباشرة لمنع التصفير وضياع المدخلات
+    # استدعاء البيانات من الـ Session State
     inv_df = st.session_state.inv_df
     sales_df = st.session_state.sales_df
     purchases_df = st.session_state.purchases_df
@@ -343,34 +343,42 @@ else:
 
         with t_edit:
             st.subheader("تعديل تفاصيل وأسعار صنف حالي")
-            if inv_df.empty: st.info("لا توجد أصناف مسجلة لتعديلها.")
+            if inv_df.empty: 
+                st.info("لا توجد أصناف مسجلة لتعديلها.")
             else:
                 selected_edit_code = st.selectbox("اختر الصنف المراد تعديله", inv_df["كود الصنف"].values, format_func=safe_item_format)
-                row_idx = inv_df[inv_df["كود الصنف"] == selected_edit_code].index[0]
                 
-                ec1, ec2, ec3 = st.columns(3)
-                updated_cat = ec1.selectbox("تعديل التصنيف", ["كهربي", "منزلي", "بلاستيك", "صيني ومطابخ", "منظفات", "عام أخري"], index=["كهربي", "منزلي", "بلاستيك", "صيني ومطابخ", "منظفات", "عام أخري"].index(inv_df.at[row_idx, "تصنيف الصنف"]) if inv_df.at[row_idx, "تصنيف الصنف"] in ["كهربي", "منزلي", "بلاستيك", "صيني ومطابخ", "منظفات", "عام أخري"] else 0)
-                updated_unit = ec2.selectbox("تعديل الوحدة", ["قطعة", "طقم", "كرتونة", "دسته", "كيلو"], index=["قطعة", "طقم", "كرتونة", "دسته", "كيلو"].index(inv_df.at[row_idx, "نوع الوحدة"]) if inv_df.at[row_idx, "نوع الوحدة"] in ["قطعة", "طقم", "كرتونة", "دسته", "كيلو"] else 0)
-                updated_wh = ec3.text_input("تعديل موقع المخزن", value=str(inv_df.at[row_idx, "موقع المخزن"]))
-                
-                ec4, ec5 = st.columns(2)
-                updated_purchase = ec4.number_input("سعر الشراء الجديد", value=float(inv_df.at[row_idx, "سعر الشراء"]), min_value=0.0)
-                updated_sale = ec5.number_input("سعر البيع الجديد", value=float(inv_df.at[row_idx, "سعر البيع"]), min_value=0.0)
-                
-                if st.button("💾 حفظ الأسعار والتفاصيل الجديدة"):
-                    st.session_state.inv_df.at[row_idx, "تصنيف الصنف"] = updated_cat
-                    st.session_state.inv_df.at[row_idx, "نوع الوحدة"] = updated_unit
-                    st.session_state.inv_df.at[row_idx, "موقع المخزن"] = updated_wh
-                    st.session_state.inv_df.at[row_idx, "سعر الشراء"] = updated_purchase
-                    st.session_state.inv_df.at[row_idx, "سعر البيع"] = updated_sale
+                # تم إصلاح الخطأ وحمايته هنا بالتأكد من أن الكود موجود في الـ DataFrame أولاً
+                matching_rows = inv_df[inv_df["كود الصنف"] == selected_edit_code]
+                if matching_rows.empty:
+                    st.warning("⚠️ الصنف المحدد غير متوفر أو تم حذفه.")
+                else:
+                    row_idx = matching_rows.index[0]
                     
-                    st.session_state.inv_df.to_csv(INVENTORY_FILE, index=False, encoding='utf-8-sig')
-                    st.success("✅ تم تحديث بيانات البند بنجاح!")
-                    st.rerun()
+                    ec1, ec2, ec3 = st.columns(3)
+                    updated_cat = ec1.selectbox("تعديل التصنيف", ["كهربي", "منزلي", "بلاستيك", "صيني ومطابخ", "منظفات", "عام أخري"], index=["كهربي", "منزلي", "بلاستيك", "صيني ومطابخ", "منظفات", "عام أخري"].index(inv_df.at[row_idx, "تصنيف الصنف"]) if inv_df.at[row_idx, "تصنيف الصنف"] in ["كهربي", "منزلي", "بلاستيك", "صيني ومطابخ", "منظفات", "عام أخري"] else 0)
+                    updated_unit = ec2.selectbox("تعديل الوحدة", ["قطعة", "طقم", "كرتونة", "دسته", "كيلو"], index=["قطعة", "طقم", "كرتونة", "دسته", "كيلو"].index(inv_df.at[row_idx, "نوع الوحدة"]) if inv_df.at[row_idx, "نوع الوحدة"] in ["قطعة", "طقم", "كرتونة", "دسته", "كيلو"] else 0)
+                    updated_wh = ec3.text_input("تعديل موقع المخزن", value=str(inv_df.at[row_idx, "موقع المخزن"]))
+                    
+                    ec4, ec5 = st.columns(2)
+                    updated_purchase = ec4.number_input("سعر الشراء الجديد", value=float(inv_df.at[row_idx, "سعر الشراء"]), min_value=0.0)
+                    updated_sale = ec5.number_input("سعر البيع الجديد", value=float(inv_df.at[row_idx, "سعر البيع"]), min_value=0.0)
+                    
+                    if st.button("💾 حفظ الأسعار والتفاصيل الجديدة"):
+                        st.session_state.inv_df.at[row_idx, "تصنيف الصنف"] = updated_cat
+                        st.session_state.inv_df.at[row_idx, "نوع الوحدة"] = updated_unit
+                        st.session_state.inv_df.at[row_idx, "موقع المخزن"] = updated_wh
+                        st.session_state.inv_df.at[row_idx, "سعر الشراء"] = updated_purchase
+                        st.session_state.inv_df.at[row_idx, "سعر البيع"] = updated_sale
+                        
+                        st.session_state.inv_df.to_csv(INVENTORY_FILE, index=False, encoding='utf-8-sig')
+                        st.success("✅ تم تحديث بيانات البند بنجاح!")
+                        st.rerun()
 
         with t_delete:
             st.subheader("❌ حذف صنف نهائياً")
-            if inv_df.empty: st.info("لا توجد أصناف بالمخزن.")
+            if inv_df.empty: 
+                st.info("لا توجد أصناف بالمخزن.")
             else:
                 selected_del_code = st.selectbox("اختر الصنف المراد حذفه تماماً", inv_df["كود الصنف"].values, format_func=safe_item_format, key="del_box")
                 st.warning("⚠️ انتبه! حذف الصنف سيؤدي لإزالته كلياً من جرد المخزن الحركي.")
@@ -433,24 +441,28 @@ else:
                 vendor = c1.selectbox("المورد", m_list)
                 
                 selected_item_code = c2.selectbox("الصنف المشترى", inv_df['كود الصنف'].values, format_func=safe_item_format)
-                item_row = inv_df[inv_df['كود الصنف'] == selected_item_code].iloc[0]
                 
-                default_pur_price = float(item_row['سعر الشراء'])
-                actual_purchase_price = c3.number_input("سعر الشراء المعتمد لهذه الفاتورة", value=default_pur_price, min_value=0.0)
-                qty = c4.number_input("الكمية المشتراة", min_value=1, step=1)
-                
-                total = actual_purchase_price * qty
-                if st.button("حفظ المشتريات وإدخالها للمخزن المحدد"):
-                    idx = inv_df[inv_df['كود الصنف'] == selected_item_code].index[0]
-                    st.session_state.inv_df.at[idx, 'الكمية'] = int(inv_df.at[idx, 'الكمية']) + qty
-                    st.session_state.inv_df.to_csv(INVENTORY_FILE, index=False, encoding='utf-8-sig')
+                matching_items = inv_df[inv_df['كود الصنف'] == selected_item_code]
+                if matching_items.empty:
+                    st.warning("الصنف المحدد غير متوفر.")
+                else:
+                    item_row = matching_items.iloc[0]
+                    default_pur_price = float(item_row['sعر الشراء']) if 'sعر الشراء' in item_row else float(item_row['سعر الشراء'])
+                    actual_purchase_price = c3.number_input("سعر الشراء المعتمد لهذه الفاتورة", value=default_pur_price, min_value=0.0)
+                    qty = c4.number_input("الكمية المشتراة", min_value=1, step=1)
                     
-                    pur_id = "PUR-" + str(int(datetime.now().timestamp()))
-                    new_p = pd.DataFrame([{"رقم الفاتورة": pur_id, "التاريخ": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "المورد": vendor, "كود الصنف": selected_item_code, "الصنف": item_row['اسم الصنف'], "تصنيف الصنف": item_row['تصنيف الصنف'], "نوع الوحدة": item_row['نوع الوحدة'], "موقع المخزن": item_row['موقع المخزن'], "سعر الشراء المعتمد": str(actual_purchase_price), "الكمية": str(qty), "إجمالي الشراء": str(total), "المسؤول": st.session_state.user}])
-                    st.session_state.purchases_df = pd.concat([purchases_df, new_p], ignore_index=True)
-                    st.session_state.purchases_df.to_csv(PURCHASES_FILE, index=False, encoding='utf-8-sig')
-                    st.success("✅ تم تسجيل الوارد وتحديث المخزن والـ Session بنجاح!")
-                    st.rerun()
+                    total = actual_purchase_price * qty
+                    if st.button("حفظ المشتريات وإدخلها للمخزن المحدد"):
+                        idx = inv_df[inv_df['كود الصنف'] == selected_item_code].index[0]
+                        st.session_state.inv_df.at[idx, 'الكمية'] = int(inv_df.at[idx, 'الكمية']) + qty
+                        st.session_state.inv_df.to_csv(INVENTORY_FILE, index=False, encoding='utf-8-sig')
+                        
+                        pur_id = "PUR-" + str(int(datetime.now().timestamp()))
+                        new_p = pd.DataFrame([{"رقم الفاتورة": pur_id, "التاريخ": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "المورد": vendor, "كود الصنف": selected_item_code, "الصنف": item_row['اسم الصنف'], "تصنيف الصنف": item_row['تصنيف الصنف'], "نوع الوحدة": item_row['نوع الوحدة'], "موقع المخزن": item_row['موقع المخزن'], "سعر الشراء المعتمد": str(actual_purchase_price), "الكمية": str(qty), "إجمالي الشراء": str(total), "المسؤول": st.session_state.user}])
+                        st.session_state.purchases_df = pd.concat([purchases_df, new_p], ignore_index=True)
+                        st.session_state.purchases_df.to_csv(PURCHASES_FILE, index=False, encoding='utf-8-sig')
+                        st.success("✅ تم تسجيل الوارد وتحديث المخزن والـ Session بنجاح!")
+                        st.rerun()
                         
         with t_manage:
             st.subheader("⚙️ مراجعة وحذف فواتير الشراء السابقة")
@@ -518,36 +530,40 @@ else:
                 discount = c7.number_input("نسبة الخصم الممنوحة (%)", min_value=0.0, max_value=100.0, step=0.5)
             else: c7.write("🔒 *صلاحية الخصم مغلقة للموظفين*")
             
-            item_row = inv_df[inv_df['كود الصنف'] == selected_item_code].iloc[0]
-            subtotal = float(item_row['سعر البيع']) * qty
-            discount_amount = subtotal * (discount / 100)
-            final_total = subtotal - discount_amount
-            
-            cost_basis = float(item_row['سعر الشراء']) * qty
-            profit_basis = final_total - cost_basis
-            
-            st.warning(f"📊 المتوفر بالمخزن: {item_row['الكمية']} {item_row['نوع الوحدة']} | موقع التواجد: {item_row['موقع المخزن']} | الصافي: {final_total} جنيه")
-            
-            if st.button("➕ إضافة المنتج الحالي للسلة"):
-                already_in_cart = sum(item['qty'] for item in st.session_state.cart if item['item_code'] == selected_item_code)
-                if int(item_row['الكمية']) < (qty + already_in_cart):
-                    st.error("❌ الكمية المطلوبة غير متوفرة بالمخزن الحركي!")
-                else:
-                    st.session_state.cart.append({
-                        "item_code": selected_item_code,
-                        "item_name": item_row['اسم الصنف'],
-                        "category": item_row['تصنيف الصنف'],
-                        "unit": item_row['نوع الوحدة'],
-                        "warehouse_loc": item_row['موقع المخزن'],
-                        "qty": qty,
-                        "price": float(item_row['سعر البيع']),
-                        "discount": discount,
-                        "final_total": final_total,
-                        "cost_basis": cost_basis,
-                        "profit_basis": profit_basis
-                    })
-                    st.success(f"🎉 تم إضافة {item_row['اسم الصنف']} إلى السلة!")
-                    st.rerun()
+            matching_items = inv_df[inv_df['كود الصنف'] == selected_item_code]
+            if matching_items.empty:
+                st.error("المنتج المختار غير موجود.")
+            else:
+                item_row = matching_items.iloc[0]
+                subtotal = float(item_row['سعر البيع']) * qty
+                discount_amount = subtotal * (discount / 100)
+                final_total = subtotal - discount_amount
+                
+                cost_basis = float(item_row['سعر الشراء']) * qty
+                profit_basis = final_total - cost_basis
+                
+                st.warning(f"📊 المتوفر بالمخزن: {item_row['الكمية']} {item_row['نوع الوحدة']} | موقع التواجد: {item_row['موقع المخزن']} | الصافي: {final_total} جنيه")
+                
+                if st.button("➕ إضافة المنتج الحالي للسلة"):
+                    already_in_cart = sum(item['qty'] for item in st.session_state.cart if item['item_code'] == selected_item_code)
+                    if int(item_row['الكمية']) < (qty + already_in_cart):
+                        st.error("❌ الكمية المطلوبة غير متوفرة بالمخزن الحركي!")
+                    else:
+                        st.session_state.cart.append({
+                            "item_code": selected_item_code,
+                            "item_name": item_row['اسم الصنف'],
+                            "category": item_row['تصنيف الصنف'],
+                            "unit": item_row['نوع الوحدة'],
+                            "warehouse_loc": item_row['موقع المخزن'],
+                            "qty": qty,
+                            "price": float(item_row['سعر البيع']),
+                            "discount": discount,
+                            "final_total": final_total,
+                            "cost_basis": cost_basis,
+                            "profit_basis": profit_basis
+                        })
+                        st.success(f"🎉 تم إضافة {item_row['اسم الصنف']} إلى السلة!")
+                        st.rerun()
             
             if st.session_state.cart:
                 st.markdown("#### 📄 محتويات السلة الحالية:")
@@ -795,7 +811,7 @@ else:
         with st.form("settings_form_updated"):
             new_showroom_name = st.text_input("اسم المعرض / الشركة بالفاتورة", value=SHOWROOM_NAME)
             new_showroom_address = st.text_input("العنوان بالتفصيل بالفاتورة", value=SHOWROOM_ADDRESS)
-            new_inquiry_number = st.text_input("رقم الدعم الفني للفواتير", value=SHOWROOM_NAME)
+            new_inquiry_number = st.text_input("رقم الدعم الفني للفواتير", value=INQUIRY_NUMBER)
             if st.form_submit_button("💾 حفظ وتحديث الإعدادات"):
                 updated_settings = pd.DataFrame([{"اسم المعرض": new_showroom_name, "العنوان": new_showroom_address, "رقم الدعم": new_inquiry_number}])
                 updated_settings.to_csv(SETTINGS_FILE, index=False, encoding='utf-8-sig')

@@ -303,16 +303,18 @@ else:
     att_df = st.session_state.att_df
     contacts_df = st.session_state.contacts_df
 
+    # دالة أمان مخصصة ومحمية لعرض الاختيارات داخل الـ selectbox بأمان وبدون خطأ الـ IndexError
+    def safe_item_format(x):
+        if inv_df.empty:
+            return str(x)
+        match = inv_df[inv_df['كود الصنف'] == x]['اسم الصنف'].values
+        return f"{x} - {match[0]}" if len(match) > 0 else f"{x} - (صنف غير معروف)"
+
     # --- 1. صفحة إدارة الأصناف ---
     if "إدارة الأصناف والمخزن" in choice:
         st.header("📦 إدارة وتكويد أصناف المخزن المتطورة")
         t_view, t_add, t_edit, t_delete = st.tabs(["📋 استعراض المنتجات", "➕ تكويد صنف جديد", "✏️ تعديل أسعار صنف", "❌ حذف صنف من النظام"])
         
-        # دالة أمان مخصصة لعرض النصوص داخل الـ selectbox بدون التسبب في أخطاء IndexError
-        def get_item_format(x):
-            match = inv_df[inv_df['كود الصنف'] == x]['اسم الصنف'].values
-            return f"{x} - {match[0]}" if len(match) > 0 else f"{x} - (اسم غير معروف)"
-
         with t_view:
             st.dataframe(inv_df, use_container_width=True)
             
@@ -341,11 +343,9 @@ else:
 
         with t_edit:
             st.subheader("تعديل تفاصيل وأسعار صنف حالي")
-            if inv_df.empty: 
-                st.info("💡 لا توجد أصناف مسجلة في المخزن حالياً لتعديلها.")
+            if inv_df.empty: st.info("لا توجد أصناف مسجلة لتعديلها.")
             else:
-                # تم تغيير الـ format_func هنا للدالة الآمنة
-                selected_edit_code = st.selectbox("اختر الصنف المراد تعديله", inv_df["كود الصنف"].values, format_func=get_item_format)
+                selected_edit_code = st.selectbox("اختر الصنف المراد تعديله", inv_df["كود الصنف"].values, format_func=safe_item_format)
                 row_idx = inv_df[inv_df["كود الصنف"] == selected_edit_code].index[0]
                 
                 ec1, ec2, ec3 = st.columns(3)
@@ -370,11 +370,9 @@ else:
 
         with t_delete:
             st.subheader("❌ حذف صنف نهائياً")
-            if inv_df.empty: 
-                st.info("💡 لا توجد أصناف في المخزن لحذفها.")
+            if inv_df.empty: st.info("لا توجد أصناف بالمخزن.")
             else:
-                # تم تغيير الـ format_func هنا أيضاً للدالة الآمنة لمنع الانهيار بعد الحذف
-                selected_del_code = st.selectbox("اختر الصنف المراد حذفه تماماً", inv_df["كود الصنف"].values, format_func=get_item_format, key="del_box")
+                selected_del_code = st.selectbox("اختر الصنف المراد حذفه تماماً", inv_df["كود الصنف"].values, format_func=safe_item_format, key="del_box")
                 st.warning("⚠️ انتبه! حذف الصنف سيؤدي لإزالته كلياً من جرد المخزن الحركي.")
                 if st.button("🔥 تأكيد الحذف النهائي للصنف"):
                     st.session_state.inv_df = inv_df[inv_df["كود الصنف"] != selected_del_code]
@@ -434,7 +432,7 @@ else:
                 c1, c2, c3, c4 = st.columns(4)
                 vendor = c1.selectbox("المورد", m_list)
                 
-                selected_item_code = c2.selectbox("الصنف المشترى", inv_df['كود الصنف'].values, format_func=lambda x: f"{x} - {inv_df[inv_df['كود الصنف'] == x]['اسم الصنف'].values[0]} ({inv_df[inv_df['كود الصنف'] == x]['تصنيف الصنف'].values[0]})")
+                selected_item_code = c2.selectbox("الصنف المشترى", inv_df['كود الصنف'].values, format_func=safe_item_format)
                 item_row = inv_df[inv_df['كود الصنف'] == selected_item_code].iloc[0]
                 
                 default_pur_price = float(item_row['سعر الشراء'])
@@ -512,7 +510,7 @@ else:
             
             st.markdown("### 🛒 إضافة المنتجات إلى السلة")
             c5, c6, c7 = st.columns(3)
-            selected_item_code = c5.selectbox("اختر المنتج بالكود", inv_df['كود الصنف'].values, format_func=lambda x: f"{x} - {inv_df[inv_df['كود الصنف']==x]['اسم الصنف'].values[0]} | التصنيف: {inv_df[inv_df['كود الصنف']==x]['تصنيف الصنف'].values[0]}")
+            selected_item_code = c5.selectbox("اختر المنتج بالكود", inv_df['كود الصنف'].values, format_func=safe_item_format)
             qty = c6.number_input("الكمية المطلوبة", min_value=1, step=1)
             
             discount = 0.0
@@ -797,7 +795,7 @@ else:
         with st.form("settings_form_updated"):
             new_showroom_name = st.text_input("اسم المعرض / الشركة بالفاتورة", value=SHOWROOM_NAME)
             new_showroom_address = st.text_input("العنوان بالتفصيل بالفاتورة", value=SHOWROOM_ADDRESS)
-            new_inquiry_number = st.text_input("رقم الدعم الفني للفواتير", value=INQUIRY_NUMBER)
+            new_inquiry_number = st.text_input("رقم الدعم الفني للفواتير", value=SHOWROOM_NAME)
             if st.form_submit_button("💾 حفظ وتحديث الإعدادات"):
                 updated_settings = pd.DataFrame([{"اسم المعرض": new_showroom_name, "العنوان": new_showroom_address, "رقم الدعم": new_inquiry_number}])
                 updated_settings.to_csv(SETTINGS_FILE, index=False, encoding='utf-8-sig')

@@ -308,6 +308,11 @@ else:
         st.header("📦 إدارة وتكويد أصناف المخزن المتطورة")
         t_view, t_add, t_edit, t_delete = st.tabs(["📋 استعراض المنتجات", "➕ تكويد صنف جديد", "✏️ تعديل أسعار صنف", "❌ حذف صنف من النظام"])
         
+        # دالة أمان مخصصة لعرض النصوص داخل الـ selectbox بدون التسبب في أخطاء IndexError
+        def get_item_format(x):
+            match = inv_df[inv_df['كود الصنف'] == x]['اسم الصنف'].values
+            return f"{x} - {match[0]}" if len(match) > 0 else f"{x} - (اسم غير معروف)"
+
         with t_view:
             st.dataframe(inv_df, use_container_width=True)
             
@@ -336,9 +341,11 @@ else:
 
         with t_edit:
             st.subheader("تعديل تفاصيل وأسعار صنف حالي")
-            if inv_df.empty: st.info("لا توجد أصناف مسجلة لتعديلها.")
+            if inv_df.empty: 
+                st.info("💡 لا توجد أصناف مسجلة في المخزن حالياً لتعديلها.")
             else:
-                selected_edit_code = st.selectbox("اختر الصنف المراد تعديله", inv_df["كود الصنف"].values, format_func=lambda x: f"{x} - {inv_df[inv_df['كود الصنف']==x]['اسم الصنف'].values[0]}")
+                # تم تغيير الـ format_func هنا للدالة الآمنة
+                selected_edit_code = st.selectbox("اختر الصنف المراد تعديله", inv_df["كود الصنف"].values, format_func=get_item_format)
                 row_idx = inv_df[inv_df["كود الصنف"] == selected_edit_code].index[0]
                 
                 ec1, ec2, ec3 = st.columns(3)
@@ -363,9 +370,11 @@ else:
 
         with t_delete:
             st.subheader("❌ حذف صنف نهائياً")
-            if inv_df.empty: st.info("لا توجد أصناف بالمخزن.")
+            if inv_df.empty: 
+                st.info("💡 لا توجد أصناف في المخزن لحذفها.")
             else:
-                selected_del_code = st.selectbox("اختر الصنف المراد حذفه تماماً", inv_df["كود الصنف"].values, format_func=lambda x: f"{x} - {inv_df[inv_df['كود الصنف']==x]['اسم الصنف'].values[0]}", key="del_box")
+                # تم تغيير الـ format_func هنا أيضاً للدالة الآمنة لمنع الانهيار بعد الحذف
+                selected_del_code = st.selectbox("اختر الصنف المراد حذفه تماماً", inv_df["كود الصنف"].values, format_func=get_item_format, key="del_box")
                 st.warning("⚠️ انتبه! حذف الصنف سيؤدي لإزالته كلياً من جرد المخزن الحركي.")
                 if st.button("🔥 تأكيد الحذف النهائي للصنف"):
                     st.session_state.inv_df = inv_df[inv_df["كود الصنف"] != selected_del_code]

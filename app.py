@@ -28,7 +28,7 @@ def number_to_arabic_words(number):
         
         units = ["", "واحد", "اثنان", "ثلاثة", "أربعة", "خمسة", "ستة", "سبعة", "ثمانية", "تسعة"]
         tens = ["", "عشرة", "عشرون", "ثلاثون", "أربعون", "خمسون", "ستون", "سبعون", "ثمانون", "تسعون"]
-        hundreds = ["", "مائة", "مائتان", "ثلاثمائة", "أربعمائة", "خمسمائة", "ستمائة", "سبعمائة", "ثمانمائة", "تسعمائة"]
+        hundreds = ["", "مائة", "مائتان", "ثلاثمائة", "أربعمائة", "خمسمائة", "ستمائة", "سبعون", "ثمانمائة", "تسعمائة"]
         
         words = []
         if num >= 1000:
@@ -401,7 +401,6 @@ else:
 
         with t_paste:
             st.markdown("💡 **انسخ البيانات من جداول الـ Excel بالكامل (بما فيها صف العناوين الرئيسي) ثم الصقها بالأسفل:**")
-            st.caption("الترتيب القياسي للأعمدة: كود الصنف | اسم الصنف | تصنيف الصنف | نوع الوحدة | موقع المخزن | الكمية | سعر الشراء | سعر البيع")
             pasted_input = st.text_area("قم باللصق هنا (Ctrl + V)", height=250, placeholder="كود الصنف\tاسم الصنف\tتصنيف الصنف...")
             
             if pasted_input.strip():
@@ -505,7 +504,7 @@ else:
                     st.success("🔥 تم حذف فاتورة الشراء وتعديل رصيد المخزن!")
                     st.rerun()
 
-    # --- 6. صفحة حركة فواتير البيع (محدثة بالكامل بالتعديل والحذف وتغيير السعر) ---
+    # --- 6. صفحة حركة فواتير البيع (محدثة بمربعات تعديل تفاعلية ومستقرة وبدون أخطاء) ---
     elif "حركة فواتير البيع" in choice:
         st.header(f"📤 إنشاء فاتورة مبيعات جديدة - {SHOWROOM_NAME}")
         if inv_df.empty: 
@@ -586,7 +585,7 @@ else:
                             "unit": item_row['نوع الوحدة'],
                             "warehouse_loc": item_row['موقع المخزن'],
                             "qty": qty,
-                            "price": unit_price, # حفظ السعر الجديد الذي تم كتابته يدوياً
+                            "price": unit_price,
                             "discount": discount,
                             "final_total": final_total,
                             "cost_basis": cost_basis,
@@ -599,43 +598,59 @@ else:
                 st.markdown("---")
                 st.markdown("### 📋 محتويات السلة وإدارة البنود حياً:")
                 
-                # تحويل السلة الحالية إلى DataFrame لعرضها وتعديلها
-                cart_df = pd.DataFrame(st.session_state.cart)
-                
-                # استخدام الجدول التفاعلي data_editor للسماح بتعديل الكمية والخصم والسعر مباشرة من الجدول
-                st.markdown("💡 *يمكنك تعديل (الكمية، السعر، أو الخصم) مباشرة من الجدول بالأسفل، وسيتم تحديث الحسابات تلقائياً:*")
-                disabled_cols = ["item_code", "item_name", "category", "unit", "warehouse_loc", "final_total", "cost_basis", "profit_basis"]
-                if st.session_state.role not in ["مدير", "مشرف"]:
-                    disabled_cols.append("price")
-                    
-                edited_cart_df = st.data_editor(
-                    cart_df[["item_code", "item_name", "category", "unit", "warehouse_loc", "qty", "price", "discount", "final_total"]], 
-                    use_container_width=True,
-                    disabled=disabled_cols,
-                    key="cart_editor"
-                )
-                
-                # تحديث قيم السلة الحقيقية بناء على التعديلات الحاصلة بالجدول
-                for idx, row in edited_cart_df.iterrows():
-                    match_inv = inv_df[inv_df['كود الصنف'] == row['item_code']].iloc[0]
-                    st.session_state.cart[idx]['qty'] = int(row['qty'])
-                    st.session_state.cart[idx]['price'] = float(row['price'])
-                    st.session_state.cart[idx]['discount'] = float(row['discount'])
-                    # إعادة احتساب الإجماليات والأرباح التلقائية بعد تعديل المستخدم
-                    sub_t = float(row['price']) * int(row['qty'])
-                    disc_a = sub_t * (float(row['discount']) / 100)
-                    st.session_state.cart[idx]['final_total'] = sub_t - disc_a
-                    st.session_state.cart[idx]['cost_basis'] = float(match_inv['سعر الشراء']) * int(row['qty'])
-                    st.session_state.cart[idx]['profit_basis'] = st.session_state.cart[idx]['final_total'] - st.session_state.cart[idx]['cost_basis']
-                
-                # ميزة حذف بند معين (واحد فقط) من الفاتورة عبر أزرار مخصصة لكل صنف
-                st.markdown("🗑️ **حذف بند مخصص من الفاتورة:**")
-                del_cols = st.columns(len(st.session_state.cart))
+                # عرض وإدارة عناصر السلة بطريقة مربعات حية مستقرة ومتوافقة 100%
+                updated_cart = []
                 for i, item in enumerate(st.session_state.cart):
-                    if del_cols[i].button(f"❌ حذف {item['item_name']}", key=f"del_item_{i}"):
-                        st.session_state.cart.pop(i)
-                        st.warning(f"🗑️ تم إزالة {item['item_name']} من السلة!")
-                        st.rerun()
+                    with st.expander(f"📦 بند رقم {i+1}: {item['item_name']} (اضغط هنا للتعديل أو الحذف)", expanded=True):
+                        col_edit1, col_edit2, col_edit3, col_del = st.columns([2, 2, 2, 1])
+                        
+                        # تعديل الكمية
+                        new_qty = col_edit1.number_input(f"تعديل الكمية", min_value=1, value=int(item['qty']), key=f"qty_{i}")
+                        
+                        # تعديل السعر
+                        if st.session_state.role in ["مدير", "مشرف"]:
+                            new_price = col_edit2.number_input(f"تعديل السعر (جنيه)", min_value=0.0, value=float(item['price']), key=f"price_{i}")
+                        else:
+                            col_edit2.write(f"السعر الثابت: {item['price']}")
+                            new_price = item['price']
+                            
+                        # تعديل الخصم
+                        if st.session_state.role in ["مدير", "مشرف"]:
+                            new_discount = col_edit3.number_input(f"الخصم %", min_value=0.0, max_value=100.0, value=float(item['discount']), key=f"disc_{i}")
+                        else:
+                            new_discount = item['discount']
+                        
+                        # زر حذف البند بشكل منفرد
+                        is_deleted = col_del.button("❌ حذف البند", key=f"del_{i}")
+                        
+                        if not is_deleted:
+                            # إعادة حساب الإجماليات فوراً
+                            match_inv = inv_df[inv_df['كود الصنف'] == item['item_code']].iloc[0]
+                            sub_t = new_price * new_qty
+                            disc_a = sub_t * (new_discount / 100)
+                            f_total = sub_t - disc_a
+                            c_basis = float(match_inv['سعر الشراء']) * new_qty
+                            p_basis = f_total - c_basis
+                            
+                            updated_cart.append({
+                                "item_code": item['item_code'],
+                                "item_name": item['item_name'],
+                                "category": item['category'],
+                                "unit": item['unit'],
+                                "warehouse_loc": item['warehouse_loc'],
+                                "qty": new_qty,
+                                "price": new_price,
+                                "discount": new_discount,
+                                "final_total": f_total,
+                                "cost_basis": c_basis,
+                                "profit_basis": p_basis
+                            })
+                            st.write(f"💰 الصافي الحالي للبند: **{f_total:,.2f} جنيه**")
+                
+                # حفظ التحديثات أو الحذف في سلة المبيعات
+                if st.session_state.cart != updated_cart:
+                    st.session_state.cart = updated_cart
+                    st.rerun()
 
                 st.markdown("---")
                 col_clear, col_submit = st.columns(2)
@@ -645,6 +660,7 @@ else:
                     
                 if col_submit.button("🧾 إنهاء وحفظ وإصدار الفاتورة الثلاثية (A5)", use_container_width=True):
                     if not c_name: st.error("❌ يرجى تحديد أو كتابة اسم العميل أولاً.")
+                    elif not st.session_state.cart: st.error("❌ السلة فارغة!")
                     else:
                         inv_id = "INV-" + str(int(datetime.now().timestamp()))
                         current_datetime_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

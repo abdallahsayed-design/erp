@@ -712,7 +712,7 @@ else:
                         st.session_state.cart = []
 
     # --- 7. صفحة ارتجاع فواتير البيع (النسخة الكاملة والمطورة لبند أو فاتورة بالكامل) ---
-    elif "ارتجاع فواتير البيع" in choice:
+    elif "↩️ ارتجاع فواتير البيع" in choice:
         st.header("↩️ منظومة ارتجاع المبيعات ومردودات الفواتير المطورة")
         
         if sales_df.empty:
@@ -815,7 +815,7 @@ else:
             st.dataframe(returns_df, use_container_width=True)
 
     # --- 8. صفحة البحث عن الفواتير وطباعتها ---
-    elif "البحث عن الفواتير وطباعتها" in choice:
+    elif "🔎 البحث عن الفواتير وطباعتها" in choice:
         st.header("🔎 نظام البحث والمراجعة وطباعة الفواتير")
         if sales_df.empty: st.info("لا توجد فواتير مبيعات مسجلة في النظام حتى الآن.")
         else:
@@ -860,7 +860,7 @@ else:
                     st.markdown(triple_html, unsafe_allow_html=True)
 
     # --- 9. صفحة تقارير البيع والشراء والأرباح ---
-    elif "تقارير البيع والشراء والأرباح" in choice:
+    elif "📈 تقارير البيع والشراء والأرباح" in choice:
         st.header(f"📈 التقارير المالية التفصيلية وحساب الأرباح لـ {SHOWROOM_NAME}")
         
         total_sales = pd.to_numeric(sales_df['إجمالي البيع'], errors='coerce').sum()
@@ -899,7 +899,7 @@ else:
                 st.download_button("📥 تحميل تقرير المشتريات بصيغة Excel", data=out_pur.getvalue(), file_name="تقرير_المشتريات_الشامل.xlsx", mime="application/vnd.ms-excel")
 
     # --- 10. صفحة المصاريف ---
-    elif "المصاريف" in choice:
+    elif "💸 المصاريف" in choice:
         st.header("💸 تسجيل المصاريف الإدارية والعمومية")
         st.dataframe(exp_df, use_container_width=True)
         b1 = st.text_input("بيان الصرف")
@@ -913,7 +913,7 @@ else:
                 st.rerun()
 
     # --- 11. الحضور والانصراف ---
-    elif "الحضور والانصراف" in choice:
+    elif "⏰ الحضور والانصراف" in choice:
         st.header("⏰ نظام تسجيل الحضور والانصراف")
         st.subheader(f"المستخدم الحالي: ({st.session_state.user})")
         col_att1, col_att2 = st.columns(2)
@@ -943,7 +943,7 @@ else:
         st.dataframe(att_df, use_container_width=True)
 
     # --- 12. صفحة إدارة وتعديل الحسابات ---
-    elif "إدارة وتعديل الصلاحيات والحسابات" in choice:
+    elif "⚙️ إدارة وتعديل الصلاحيات والحسابات" in choice:
         st.header("⚙️ لوحة التحكم في الحسابات وصلاحيات الوصول")
         tab_users, tab_roles = st.tabs(["👤 إدارة وتعديل وحذف الحسابات (اليوزرات)", "🔒 تفعيل وإخفاء صلاحيات الصفحات"])
         
@@ -1004,7 +1004,7 @@ else:
                 st.rerun()
 
     # --- 13. صفحة إعدادات بيانات الفاتورة والدعم ---
-    elif "إعدادات بيانات الفاتورة والدعم" in choice:
+    elif "⚙️ إعدادات بيانات الفاتورة والدعم" in choice:
         st.header("⚙️ تحديث وإعداد بيانات طباعة الفاتورة والدعم")
         with st.form("settings_form_updated"):
             new_showroom_name = st.text_input("اسم المعرض / الشركة بالفاتورة", value=SHOWROOM_NAME)

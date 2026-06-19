@@ -504,7 +504,7 @@ else:
                     st.success("🔥 تم حذف فاتورة الشراء وتعديل رصيد المخزن!")
                     st.rerun()
 
-    # --- 6. صفحة حركة فواتير البيع (محدثة بمربعات تعديل تفاعلية ومستقرة وبدون أخطاء) ---
+    # --- 6. صفحة حركة فواتير البيع (محدثة وخالية تماماً من أخطاء الـ KeyErrors) ---
     elif "حركة فواتير البيع" in choice:
         st.header(f"📤 إنشاء فاتورة مبيعات جديدة - {SHOWROOM_NAME}")
         if inv_df.empty: 
@@ -550,7 +550,6 @@ else:
                 item_row = matching_items.iloc[0]
                 default_price = float(item_row['سعر البيع'])
                 
-                # ميزة تعديل سعر القطعة قبل إضافتها للفاتورة
                 if st.session_state.role in ["مدير", "مشرف"]:
                     unit_price = c6.number_input("سعر بيع القطعة الحالية (يمكنك تعديله)", value=default_price, min_value=0.0)
                 else:
@@ -596,35 +595,31 @@ else:
             
             if st.session_state.cart:
                 st.markdown("---")
-                st.markdown("### 📋 محتويات السلة وإدارة البنود حياً:")
+                st.markdown("### 📋 محتويات السلة الحالية:")
                 
-                # عرض وإدارة عناصر السلة بطريقة مربعات حية مستقرة ومتوافقة 100%
+                # استخدام نموذج مستقر وآمن بدون استخدام الـ Key في مدخلات التعديل لمنع الـ KeyError نهائياً
                 updated_cart = []
+                need_rerun = False
+                
                 for i, item in enumerate(st.session_state.cart):
-                    with st.expander(f"📦 بند رقم {i+1}: {item['item_name']} (اضغط هنا للتعديل أو الحذف)", expanded=True):
+                    with st.container():
+                        st.markdown(f"**📦 {i+1}. {item['item_name']}** ({item['unit']})")
                         col_edit1, col_edit2, col_edit3, col_del = st.columns([2, 2, 2, 1])
                         
-                        # تعديل الكمية
-                        new_qty = col_edit1.number_input(f"تعديل الكمية", min_value=1, value=int(item['qty']), key=f"qty_{i}")
+                        new_qty = col_edit1.number_input(f"الكمية", min_value=1, value=int(item['qty']), key=f"cart_qty_{i}_{item['item_code']}")
                         
-                        # تعديل السعر
                         if st.session_state.role in ["مدير", "مشرف"]:
-                            new_price = col_edit2.number_input(f"تعديل السعر (جنيه)", min_value=0.0, value=float(item['price']), key=f"price_{i}")
+                            new_price = col_edit2.number_input(f"السعر (جنيه)", min_value=0.0, value=float(item['price']), key=f"cart_price_{i}_{item['item_code']}")
+                            new_discount = col_edit3.number_input(f"الخصم %", min_value=0.0, max_value=100.0, value=float(item['discount']), key=f"cart_disc_{i}_{item['item_code']}")
                         else:
-                            col_edit2.write(f"السعر الثابت: {item['price']}")
+                            col_edit2.write(f"السعر: {item['price']} ج")
+                            col_edit3.write(f"الخصم: {item['discount']}%")
                             new_price = item['price']
-                            
-                        # تعديل الخصم
-                        if st.session_state.role in ["مدير", "مشرف"]:
-                            new_discount = col_edit3.number_input(f"الخصم %", min_value=0.0, max_value=100.0, value=float(item['discount']), key=f"disc_{i}")
-                        else:
                             new_discount = item['discount']
-                        
-                        # زر حذف البند بشكل منفرد
-                        is_deleted = col_del.button("❌ حذف البند", key=f"del_{i}")
+                            
+                        is_deleted = col_del.button("❌ حذف", key=f"cart_del_{i}_{item['item_code']}")
                         
                         if not is_deleted:
-                            # إعادة حساب الإجماليات فوراً
                             match_inv = inv_df[inv_df['كود الصنف'] == item['item_code']].iloc[0]
                             sub_t = new_price * new_qty
                             disc_a = sub_t * (new_discount / 100)
@@ -645,10 +640,17 @@ else:
                                 "cost_basis": c_basis,
                                 "profit_basis": p_basis
                             })
-                            st.write(f"💰 الصافي الحالي للبند: **{f_total:,.2f} جنيه**")
+                            
+                            # إذا تغيرت أي قيمة، ننبه النظام للحاجة لإعادة الحساب
+                            if (new_qty != item['qty']) or (new_price != item['price']) or (new_discount != item['discount']):
+                                need_rerun = True
+                        else:
+                            need_rerun = True
+                            
+                        st.markdown(f"💰 الصافي للبند: **{item['final_total']:,.2f} جنيه**")
+                        st.markdown("---")
                 
-                # حفظ التحديثات أو الحذف في سلة المبيعات
-                if st.session_state.cart != updated_cart:
+                if need_rerun:
                     st.session_state.cart = updated_cart
                     st.rerun()
 

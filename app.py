@@ -377,7 +377,7 @@ else:
                     st.success("🗑️ تم حذف المنتج من النظام بنجاح!")
                     st.rerun()
 
-    # --- 2. صفحة رفع رصيد أول المدة (مع إضافة خاصية اللاصق الذكي) ---
+    # --- 2. صفحة رفع رصيد أول المدة ---
     elif "رصيد أول المدة" in choice:
         st.header("📊 رفع وتثبيت رصيد أول المدة ومخزون البضائع")
         
@@ -505,11 +505,11 @@ else:
                     st.success("🔥 تم حذف فاتورة الشراء وتعديل رصيد المخزن!")
                     st.rerun()
 
-    # --- 6. صفحة حركة فواتير البيع ---
+    # --- 6. صفحة حركة فواتير البيع (محدثة بالكامل بالتعديل والحذف وتغيير السعر) ---
     elif "حركة فواتير البيع" in choice:
         st.header(f"📤 إنشاء فاتورة مبيعات جديدة - {SHOWROOM_NAME}")
         if inv_df.empty: 
-            st.warning("⚠️ لا يمكن إتمام عملية البيع لأن المخزن فارغ تماماً ولا يحتوي على بضائع مسجلة أول مدة.")
+            st.warning("⚠️ لا يمكن إتمام عملية البيع لأن المخزن فارغ تماماً.")
         else:
             c_list = contacts_df[contacts_df['النوع'] == 'عميل']['الاسم'].unique()
             c1, c2, c3, c4 = st.columns(4)
@@ -530,7 +530,7 @@ else:
             if c_name and not sales_df.empty:
                 visit_count = len(sales_df[sales_df["اسم العميل"] == c_name]['رقم الفاتورة'].unique())
                 
-            st.info(f"📊 عدد زيارات ومبيعات هذا العميل السابقة في النظام: **{visit_count}** مرة")
+            st.info(f"📊 عدد زيارات ومبيعات هذا العميل السابقة: **{visit_count}** مرة")
             
             st.markdown("---")
             cc1, cc2, cc3 = st.columns(3)
@@ -543,28 +543,36 @@ else:
                 collect_date = str(cc3.date_input("تاريخ التحصيل المستهدف"))
             
             st.markdown("### 🛒 إضافة المنتجات إلى السلة")
-            c5, c6, c7 = st.columns(3)
+            c5, c6, c7, c8 = st.columns(4)
             selected_item_code = c5.selectbox("اختر المنتج بالكود", inv_df['كود الصنف'].values, format_func=safe_item_format)
-            qty = c6.number_input("الكمية المطلوبة", min_value=1, step=1)
-            
-            discount = 0.0
-            if st.session_state.role in ["مدير", "مشرف"]:
-                discount = c7.number_input("نسبة الخصم الممنوحة (%)", min_value=0.0, max_value=100.0, step=0.5)
-            else: c7.write("🔒 *صلاحية الخصم مغلقة للموظفين*")
             
             matching_items = inv_df[inv_df['كود الصنف'] == selected_item_code]
-            if matching_items.empty:
-                st.error("⚠️ خطأ حرج: البند المحدد غير متوفر بالمخزون الحالي.")
-            else:
+            if not matching_items.empty:
                 item_row = matching_items.iloc[0]
-                subtotal = float(item_row['سعر البيع']) * qty
+                default_price = float(item_row['سعر البيع'])
+                
+                # ميزة تعديل سعر القطعة قبل إضافتها للفاتورة
+                if st.session_state.role in ["مدير", "مشرف"]:
+                    unit_price = c6.number_input("سعر بيع القطعة الحالية (يمكنك تعديله)", value=default_price, min_value=0.0)
+                else:
+                    c6.write(f"🔒 السعر الافتراضي: **{default_price} جنيه**")
+                    unit_price = default_price
+                    
+                qty = c7.number_input("الكمية المطلوبة", min_value=1, step=1)
+                
+                discount = 0.0
+                if st.session_state.role in ["مدير", "مشرف"]:
+                    discount = c8.number_input("نسبة الخصم الممنوحة (%)", min_value=0.0, max_value=100.0, step=0.5)
+                else: c8.write("🔒 *الخصومات مغلقة للموظفين*")
+                
+                subtotal = unit_price * qty
                 discount_amount = subtotal * (discount / 100)
                 final_total = subtotal - discount_amount
                 
                 cost_basis = float(item_row['سعر الشراء']) * qty
                 profit_basis = final_total - cost_basis
                 
-                st.warning(f"📊 المتوفر بالمخزن: {item_row['الكمية']} {item_row['نوع الوحدة']} | موقع التواجد: {item_row['موقع المخزن']} | الصافي: {final_total} جنيه")
+                st.warning(f"📊 المتوفر بالمخزن: {item_row['الكمية']} {item_row['نوع الوحدة']} | موقع التواجد: {item_row['موقع المخزن']}")
                 
                 if st.button("➕ إضافة المنتج الحالي للسلة"):
                     already_in_cart = sum(item['qty'] for item in st.session_state.cart if item['item_code'] == selected_item_code)
@@ -578,7 +586,7 @@ else:
                             "unit": item_row['نوع الوحدة'],
                             "warehouse_loc": item_row['موقع المخزن'],
                             "qty": qty,
-                            "price": float(item_row['سعر البيع']),
+                            "price": unit_price, # حفظ السعر الجديد الذي تم كتابته يدوياً
                             "discount": discount,
                             "final_total": final_total,
                             "cost_basis": cost_basis,
@@ -588,12 +596,50 @@ else:
                         st.rerun()
             
             if st.session_state.cart:
-                st.markdown("#### 📄 محتويات السلة الحالية:")
-                cart_df = pd.DataFrame(st.session_state.cart)
-                st.dataframe(cart_df[["item_code", "item_name", "category", "unit", "warehouse_loc", "qty", "price", "discount", "final_total"]], use_container_width=True)
+                st.markdown("---")
+                st.markdown("### 📋 محتويات السلة وإدارة البنود حياً:")
                 
+                # تحويل السلة الحالية إلى DataFrame لعرضها وتعديلها
+                cart_df = pd.DataFrame(st.session_state.cart)
+                
+                # استخدام الجدول التفاعلي data_editor للسماح بتعديل الكمية والخصم والسعر مباشرة من الجدول
+                st.markdown("💡 *يمكنك تعديل (الكمية، السعر، أو الخصم) مباشرة من الجدول بالأسفل، وسيتم تحديث الحسابات تلقائياً:*")
+                disabled_cols = ["item_code", "item_name", "category", "unit", "warehouse_loc", "final_total", "cost_basis", "profit_basis"]
+                if st.session_state.role not in ["مدير", "مشرف"]:
+                    disabled_cols.append("price")
+                    
+                edited_cart_df = st.data_editor(
+                    cart_df[["item_code", "item_name", "category", "unit", "warehouse_loc", "qty", "price", "discount", "final_total"]], 
+                    use_container_width=True,
+                    disabled=disabled_cols,
+                    key="cart_editor"
+                )
+                
+                # تحديث قيم السلة الحقيقية بناء على التعديلات الحاصلة بالجدول
+                for idx, row in edited_cart_df.iterrows():
+                    match_inv = inv_df[inv_df['كود الصنف'] == row['item_code']].iloc[0]
+                    st.session_state.cart[idx]['qty'] = int(row['qty'])
+                    st.session_state.cart[idx]['price'] = float(row['price'])
+                    st.session_state.cart[idx]['discount'] = float(row['discount'])
+                    # إعادة احتساب الإجماليات والأرباح التلقائية بعد تعديل المستخدم
+                    sub_t = float(row['price']) * int(row['qty'])
+                    disc_a = sub_t * (float(row['discount']) / 100)
+                    st.session_state.cart[idx]['final_total'] = sub_t - disc_a
+                    st.session_state.cart[idx]['cost_basis'] = float(match_inv['سعر الشراء']) * int(row['qty'])
+                    st.session_state.cart[idx]['profit_basis'] = st.session_state.cart[idx]['final_total'] - st.session_state.cart[idx]['cost_basis']
+                
+                # ميزة حذف بند معين (واحد فقط) من الفاتورة عبر أزرار مخصصة لكل صنف
+                st.markdown("🗑️ **حذف بند مخصص من الفاتورة:**")
+                del_cols = st.columns(len(st.session_state.cart))
+                for i, item in enumerate(st.session_state.cart):
+                    if del_cols[i].button(f"❌ حذف {item['item_name']}", key=f"del_item_{i}"):
+                        st.session_state.cart.pop(i)
+                        st.warning(f"🗑️ تم إزالة {item['item_name']} من السلة!")
+                        st.rerun()
+
+                st.markdown("---")
                 col_clear, col_submit = st.columns(2)
-                if col_clear.button("🗑️ تفريغ السلة البدء من جديد"):
+                if col_clear.button("🗑️ تفريغ السلة كاملة والبدء من جديد"):
                     st.session_state.cart = []
                     st.rerun()
                     
@@ -635,7 +681,7 @@ else:
                         st.session_state.sales_df = pd.concat([sales_df, pd.DataFrame(new_sales_entries)], ignore_index=True)
                         st.session_state.sales_df.to_csv(SALES_FILE, index=False, encoding='utf-8-sig')
                         
-                        st.success("🎉 تم تسجيل وحفظ الفاتورة بالكامل بنجاح في النظام الحركي!")
+                        st.success("🎉 تم تسجيل وحفظ الفاتورة بالكامل بنجاح في النظام!")
                         
                         triple_html = generate_triple_invoice_html(inv_id, current_datetime_str, c_name, c_phone, c_address, sale_type, collect_system, collect_date, st.session_state.user, st.session_state.cart, SHOWROOM_NAME, SHOWROOM_ADDRESS, INQUIRY_NUMBER)
                         st.markdown(get_download_link(triple_html, f"الفاتورة_الثلاثية_{inv_id}.html"), unsafe_allow_html=True)

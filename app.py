@@ -161,14 +161,13 @@ def generate_triple_invoice_html(inv_id, datetime_str, client_name, phone, addre
     html_content = f"""
     <div class="triple-print-wrapper">
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
             @page {{ size: A5 portrait; margin: 0; }}
             @media print {{
                 body {{ direction: rtl; background: #fff; color: #000; padding: 0; margin: 0; }}
                 header, [data-testid="stSidebar"], [data-testid="stHeader"], .no-print-zone, .stButton, .download-btn-area {{ display: none !important; }}
                 .invoice-page {{ width: 148mm; height: 210mm; box-sizing: border-box; padding: 10mm !important; margin: 0 !important; page-break-after: always; border: none !important; box-shadow: none !important; }}
             }}
-            .triple-print-wrapper {{ direction: rtl; text-align: right; font-family: 'Cairo', sans-serif; }}
+            .triple-print-wrapper {{ direction: rtl; text-align: right; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; }}
             .invoice-page {{ width: 148mm; max-width: 100%; border: 2px solid #000; padding: 20px; margin: 20px auto; background: #fff; color: #000; box-sizing: border-box; page-break-after: always; }}
             .invoice-header {{ text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }}
             .invoice-header h3 {{ margin: 0; background: #000; color: #fff; padding: 4px 12px; display: inline-block; font-size: 14px; border-radius: 4px; }}
@@ -386,12 +385,10 @@ else:
         
         def process_and_merge_data(imported_df):
             try:
-                # التأكد من معالجة العناوين وتنسيق كود الصنف كنص
                 imported_df.columns = imported_df.columns.str.strip()
                 if "كود الصنف" in imported_df.columns:
                     imported_df["كود الصنف"] = imported_df["كود الصنف"].astype(str)
                     
-                    # دمج حركي: الاحتفاظ بالبيانات المدخلة وتحديث الكميات والأسعار
                     combined = pd.concat([st.session_state.inv_df, imported_df]).drop_duplicates(subset=['كود الصنف'], keep='last')
                     st.session_state.inv_df = combined
                     st.session_state.inv_df.to_csv(INVENTORY_FILE, index=False, encoding='utf-8-sig')
@@ -409,7 +406,6 @@ else:
             
             if pasted_input.strip():
                 try:
-                    # قراءة البيانات المنسوخة عبر الحافظة والـ Tabs separators
                     paste_df = pd.read_csv(StringIO(pasted_input), sep="\t")
                     st.write("🔍 **معاينة حية للبيانات التي قمت بلصقها:**")
                     st.dataframe(paste_df, use_container_width=True)
@@ -509,7 +505,7 @@ else:
                     st.success("🔥 تم حذف فاتورة الشراء وتعديل رصيد المخزن!")
                     st.rerun()
 
-    # --- 6. صفحة حركة فواتير البيع (مصلحة تماماً ضد انهيار IndexError) ---
+    # --- 6. صفحة حركة فواتير البيع ---
     elif "حركة فواتير البيع" in choice:
         st.header(f"📤 إنشاء فاتورة مبيعات جديدة - {SHOWROOM_NAME}")
         if inv_df.empty: 
@@ -556,7 +552,6 @@ else:
                 discount = c7.number_input("نسبة الخصم الممنوحة (%)", min_value=0.0, max_value=100.0, step=0.5)
             else: c7.write("🔒 *صلاحية الخصم مغلقة للموظفين*")
             
-            # حماية وفحص وجود العنصر لعدم التسبب بـ IndexError
             matching_items = inv_df[inv_df['كود الصنف'] == selected_item_code]
             if matching_items.empty:
                 st.error("⚠️ خطأ حرج: البند المحدد غير متوفر بالمخزون الحالي.")
@@ -769,7 +764,7 @@ else:
         st.markdown("---")
         st.dataframe(att_df, use_container_width=True)
 
-    # --- 11. صفحة إدارة وتعديل الحسابات (اليوزرات مصلحة ومطورة بالكامل) ---
+    # --- 11. صفحة إدارة وتعديل الحسابات ---
     elif "إدارة وتعديل الصلاحيات والحسابات" in choice:
         st.header("⚙️ لوحة التحكم في الحسابات وصلاحيات الوصول")
         tab_users, tab_roles = st.tabs(["👤 إدارة وتعديل وحذف الحسابات (اليوزرات)", "🔒 تفعيل وإخفاء صلاحيات الصفحات"])
